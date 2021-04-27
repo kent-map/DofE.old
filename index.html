@@ -211,7 +211,11 @@
     })
     .then(config => {
       siteConfig = config
+      acct = siteConfig.acct || acct
+      repo = siteConfig.repo || repo
       ref = siteConfig.ref || ref
+      contentSource.acct = acct
+      contentSource.repo = repo
       contentSource.ref = ref
     })
     .then(resp => getMergedComponentsList(componentsRoot, acct, repo, ref, contentSource))
