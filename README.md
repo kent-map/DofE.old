@@ -1,2 +1,2 @@
 # DofE
-Ken Maps Online - Duke of Edinburgh award site
+Kent Maps Online - Duke of Edinburgh award site
