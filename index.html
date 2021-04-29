@@ -17,23 +17,23 @@
       ></component>
     </div>
     <div id="tabs-bar" ref="tabsBar">
-      <span v-for="viewer in viewers" :key="`tab-${viewer.name}`" 
-            :class="{'active-tab': activeViewer && activeViewer.name === viewer.name}" 
-            :data-tab="viewer.name" 
+      <span v-for="viewer in viewersEnabled" :key="`tab-${viewer}`" 
+            :class="{'active-tab': selectedViewer === viewer}" 
+            :data-tab="viewer" 
             @click="selectedViewer = viewer; viewerIsOpen = true">
-        <i v-if="viewerData[viewer.name]" :class="viewerData[viewer.name].icon"></i>
+        <i v-if="viewerData[viewer]" :class="viewerData[viewer].icon"></i>
       </span>
     </div>
     <div id="essay" ref="essay" v-html="html" @scroll="onScroll"></div>
     <div id="viewer" ref="viewer" :style="viewerStyle">
       <i v-if="!isVerticalLayout && viewerIsOpen" class="far fa-times-circle" style="position:absolute; top:0; right:0; z-index:500; font-size:26px;" @click="viewerIsOpen = !viewerIsOpen"></i>
-      <component v-for="viewer in viewers" :key="viewer.name" v-bind:is="viewer.name" 
-                 :items="viewer.items"
-                 :all-items="viewer.allItems"
+      <component v-for="viewer in viewersEnabled" :key="viewer" v-bind:is="viewer" 
+                 :items="items"
                  :entities="entities"
-                 :active="selectedViewer !== null && viewer.name === selectedViewer.name"
+                 :active="viewer === selectedViewer"
                  :actions="actions"
                  :hover-item="hoverItem"
+                 :content-source="contentSource"
                  @update-component-data="updateComponentData"
                  @set-hover-item="hoverItem = $event"
       ></component>
@@ -147,7 +147,7 @@
       // For local dev in GHP mode
       if (window.location.host === 'localhost:8080' || window.location.hostname.indexOf('gitpod') >= 0) {
         let repo = window.location.pathname.split('/').filter(elem => elem !== '')[0]
-        contentSource = {acct: null, repo: null, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true}
+        contentSource = {acct: null, repo, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true}
 
       // For local dev in custom domain mode
       } else if (window.location.host === 'localhost:8088') {
@@ -238,7 +238,7 @@
           segments: {},
           entities: {},
           availableViewers,
-          viewers: [],
+          // viewers: [],
           selectedViewer: null,
           viewerData: {},
           scrollTop: 0,
@@ -251,7 +251,7 @@
         }),
         computed: {
           essayConfig() { return this.params.find(attr => attr['ve-config'] !== undefined) },
-          activeViewer() { return this.viewers.find(viewer => this.selectedViewer && viewer.name === this.selectedViewer.name) },
+          // activeViewer() { return this.viewers.find(viewer => this.selectedViewer && viewer === this.selectedViewer.name) },
           viewerStyle() { return { 
             height: this.viewerIsOpen
               ? this.isVerticalLayout 
@@ -260,7 +260,12 @@
               : 0 
             } 
           },
-          isVerticalLayout() { return !this.forceHorizontalLayout && this.layouts.indexOf('vertical') >= 0 }
+          isVerticalLayout() { return !this.forceHorizontalLayout && this.layouts.indexOf('vertical') >= 0 },
+          items() { return this.active ? this.paramsInScope(document.querySelector(`[data-id="${this.active}"]`)) : [] },
+          viewersEnabled() { 
+              let viewers = this.items.filter(item => this.availableViewers.has(item.viewer)).map(item => item.viewer)
+              return viewers.filter((viewer, index) => viewers.indexOf(viewer) === index)
+          }
         },
         mounted() {
           this.anchor = window.location.href.indexOf('#') >= 0 ? window.location.href.split('#').pop() : null
@@ -437,8 +442,8 @@
           // Finds all entity references in param tags
           findEntities() {
             return new Set(Array.from(this.$refs.essay.querySelectorAll('param'))
-                           .filter(el => el.attributes.eid)
-                           .map(el => el.attributes.eid.value))
+                           .filter(el => el.attributes.eid || el.attributes.center)
+                           .map(el => (el.attributes.eid || el.attributes.center).value))
           },
 
           // Finds all param tags in elements between top-level app element and element in para arg
@@ -572,6 +577,7 @@
                 if (!target) { 
                   const parsedUrl = parseUrl(link.href)
                   let pathElems = parsedUrl.pathname.split('/').filter(elem => elem !== '')
+                  console.log(contentSource.isGhpSite, contentSource.repo, pathElems)
                   if (contentSource.isGhpSite && pathElems[0] === contentSource.repo) pathElems = pathElems.slice(1)
                   target = parsedUrl.hash === '' ? `/${pathElems.join('/')}/` : parsedUrl.hash.split('?')[0]
                 }
@@ -584,7 +590,12 @@
                   while (!target.dataset.target && target.parentElement) { target = target.parentElement }
                   let path = target.dataset.target
                   if (path[0] === '#') {
-                    document.querySelector(path).scrollIntoView({ block:'start' })
+                    // document.querySelector(path).scrollIntoView({ block:'start' })
+                    let anchorElem = document.getElementById(path.slice(1))
+                    if (anchorElem) {
+                      this.scrollTop = anchorElem.offsetTop
+                      this.$refs.essay.scrollTop = this.scrollTop - 100
+                    }
                   } else {
                     this.loadEssay(path)
                   }
@@ -769,8 +780,9 @@
               this.removeItemEventHandlers(priorPara)
               this.removeInteractionHandlers(priorPara)
             }
+            // this.items = this.paramsInScope(activePara)
+            /* let allItems = this.paramsInScope(activePara)
             let viewers = []
-            let allItems = this.paramsInScope(activePara)
             allItems
               .filter(param => this.availableViewers.has(param.viewer))
               .forEach(param => {
@@ -783,11 +795,21 @@
               })
             this.viewers = viewers
             this.selectedViewer = this.viewerIsOpen && this.viewers.length > 0 ? this.viewers[0] : null
+            */ 
+          },
+
+
+          viewersEnabled: {
+            handler: function () {
+              this.selectedViewer = this.viewerIsOpen && this.viewersEnabled.length > 0 ? this.viewersEnabled[0] : null
+              console.log(`viewersEnabled: ${this.viewersEnabled}`)
+            },
+            immediate: true
           },
 
           isVerticalLayout: {
             handler: function () {
-              this.selectedViewer = this.isVerticalLayout && this.viewers.length > 0 ? this.viewers[0] : this.selectedViewer
+              this.selectedViewer = this.isVerticalLayout && this.viewersEnabled.length > 0 ? this.viewersEnabled[0] : this.selectedViewer
               if (this.isVerticalLayout) this.viewerIsOpen = true
             },
             immediate: true
@@ -804,10 +826,6 @@
           forceHorizontalLayout: {
             handler: function (forceHorizontalLayout) { console.log(`forceHorizontalLayout=${forceHorizontalLayout}`) },
             immediate: true
-          },
-          viewers: {
-            handler: function (viewers) { if (viewers.length > 0) console.log('viewers', viewers) },
-            immediate: true
           }
 
         }
@@ -823,7 +841,7 @@
         loadDependencies(dependencies, i, callback) {
           if (i === 0) {
             let componentData = {}
-            componentData[this.$options.name] = { label: this.label, icon: this.icon }
+            componentData[this.$options.name] = { label: this.viewerLabel, icon: this.viewerIcon }
             this.$emit('update-component-data', componentData)
           }
           if (dependencies.length > 0) {
