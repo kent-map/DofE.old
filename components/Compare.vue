@@ -62,7 +62,7 @@ module.exports = {
         images: this.images,
         osdOptions: { // OpenSeaDragon options
           zoomPerClick: 2,
-          homeFillsViewer: true,
+          homeFillsViewer: false,
         }
       })
       })
