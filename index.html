@@ -147,7 +147,8 @@
       // For local dev in GHP mode
       if (window.location.host === 'localhost:8080' || window.location.hostname.indexOf('gitpod') >= 0) {
         let repo = window.location.pathname.split('/').filter(elem => elem !== '')[0]
-        contentSource = {acct: null, repo, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true}
+        contentSource = {acct: null, repo, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true,
+                         assetsBaseUrl: `${window.location.origin}/${repo}`}
 
       // For local dev in custom domain mode
       } else if (window.location.host === 'localhost:8088') {
@@ -251,7 +252,6 @@
         }),
         computed: {
           essayConfig() { return this.params.find(attr => attr['ve-config'] !== undefined) },
-          // activeViewer() { return this.viewers.find(viewer => this.selectedViewer && viewer === this.selectedViewer.name) },
           viewerStyle() { return { 
             height: this.viewerIsOpen
               ? this.isVerticalLayout 
@@ -285,10 +285,8 @@
             placement: 'bottom-start',          
             onShow: async (instance) => { 
               instance.setContent(this.$refs.markdownViewer.innerHTML) 
-              // this.$refs.app.classList.add('dimmed')
             },
             onHide: (instance) => { 
-              // this.$refs.app.classList.remove('dimmed')
             },
           })
         },
@@ -373,6 +371,19 @@
                   this.active = segments.length > 0 ? segments[0].dataset.id : null
                 }
               })
+              // Load custom components declared in essay
+              Array.from(document.getElementById('essay').querySelectorAll('param'))
+                .filter(param => param.attributes['ve-component'])
+                .map(param => param.attributes.url.value)
+                .forEach(customComponentUrl => {
+                  let httpComponent = httpVueLoader(customComponentUrl)
+                  let componentName = `${componentPrefix}${camelToKebab(customComponentUrl.split('/').pop().split('.')[0])}`
+                  if (!availableViewers.has(componentName)) {
+                    availableViewers.add(componentName)
+                    Vue.component(componentName, httpComponent)
+                  }
+              })
+              
               this.params = Array.from(document.getElementById('essay').querySelectorAll('param'))
                 .map(param => {
                   let prior = param.previousElementSibling
@@ -442,7 +453,7 @@
           // Finds all entity references in param tags
           findEntities() {
             return new Set(Array.from(this.$refs.essay.querySelectorAll('param'))
-                           .filter(el => el.attributes.eid || el.attributes.center)
+                           .filter(el => el.attributes.eid || (el.attributes.center && isEntityID(el.attributes.center.value)))
                            .map(el => (el.attributes.eid || el.attributes.center).value))
           },
 
@@ -577,7 +588,6 @@
                 if (!target) { 
                   const parsedUrl = parseUrl(link.href)
                   let pathElems = parsedUrl.pathname.split('/').filter(elem => elem !== '')
-                  console.log(contentSource.isGhpSite, contentSource.repo, pathElems)
                   if (contentSource.isGhpSite && pathElems[0] === contentSource.repo) pathElems = pathElems.slice(1)
                   target = parsedUrl.hash === '' ? `/${pathElems.join('/')}/` : parsedUrl.hash.split('?')[0]
                 }
@@ -765,44 +775,26 @@
           },
 
           // Watcher that updates various data elements when the active paragraph changes
-          active(paraId, priorId) {
-            console.log(`active=${this.active}`)
-            let activePara = document.querySelector(`[data-id="${paraId}"]`)
-            if (activePara) {
-              if (this.$refs.tabsBar) activePara.appendChild(this.$refs.tabsBar)
-              activePara.classList.add('active')
-              this.addItemEventHandlers(activePara)
-              this.addInteractionHandlers(activePara)
+          active(current, prior) {
+            console.log(`activeSegment=${current}`)
+            let activeSegment = document.querySelector(`[data-id="${current}"]`)
+            if (activeSegment) {
+              if (this.$refs.tabsBar) activeSegment.appendChild(this.$refs.tabsBar)
+              activeSegment.classList.add('active')
+              this.addItemEventHandlers(activeSegment)
+              this.addInteractionHandlers(activeSegment)
             }
-            let priorPara = document.querySelector(`[data-id="${priorId}"]`)
-            if (priorPara) {
-              priorPara.classList.remove('active')
-              this.removeItemEventHandlers(priorPara)
-              this.removeInteractionHandlers(priorPara)
+            let priorSegment = document.querySelector(`[data-id="${prior}"]`)
+            if (priorSegment) {
+              priorSegment.classList.remove('active')
+              this.removeItemEventHandlers(priorSegment)
+              this.removeInteractionHandlers(priorSegment)
             }
-            // this.items = this.paramsInScope(activePara)
-            /* let allItems = this.paramsInScope(activePara)
-            let viewers = []
-            allItems
-              .filter(param => this.availableViewers.has(param.viewer))
-              .forEach(param => {
-                let viewerData = viewers.find(viewer => viewer.name === param.viewer)
-                if (!viewerData) {
-                  viewerData = {name: param.viewer, allItems, items: []}
-                  viewers.push(viewerData)
-                }
-                viewerData.items.push(param)
-              })
-            this.viewers = viewers
-            this.selectedViewer = this.viewerIsOpen && this.viewers.length > 0 ? this.viewers[0] : null
-            */ 
           },
-
 
           viewersEnabled: {
             handler: function () {
               this.selectedViewer = this.viewerIsOpen && this.viewersEnabled.length > 0 ? this.viewersEnabled[0] : null
-              console.log(`viewersEnabled: ${this.viewersEnabled}`)
             },
             immediate: true
           },
@@ -822,11 +814,6 @@
           selectedViewer (selectedViewer) { console.log('selectedViewer', selectedViewer) },
           selectedItem (eid) { console.log(`selectedItem=${eid}`) },
           hoverItem (eid) { console.log(`index.hoverItem=${eid}`) },
-
-          forceHorizontalLayout: {
-            handler: function (forceHorizontalLayout) { console.log(`forceHorizontalLayout=${forceHorizontalLayout}`) },
-            immediate: true
-          }
 
         }
       })
@@ -906,7 +893,8 @@
     // Various utility and helper methods
     function camelToKebab(input) { return input.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}
     function kebabToCamel(input) { return input.replace(/-([a-z])/g, function (g) {return g[1].toUpperCase()})}
-    function isNumeric(arg){ return !isNaN(arg) }
+    function isNumeric(arg) { return !isNaN(arg) }
+    function isEntityID(arg) { console.log('arg', arg); return typeof arg === 'string' && arg.split(':').slice(-1).filter(val => val.length > 1 && val[0] === 'Q' && isNumeric(val.slice(0))) !== undefined }
 
     // Gets site config
     async function getSiteConfig() {
@@ -1041,7 +1029,7 @@
       }
       if (pathElems[0] === contentSource.repo) pathElems = pathElems.slice(1)
       converted = `${contentSource.assetsBaseUrl || contentSource.baseUrl}/${pathElems.join('/')}`
-      // console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
+      console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
       return converted
     }
   </script>
