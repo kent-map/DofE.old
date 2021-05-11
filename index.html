@@ -1,19 +1,32 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <link href="https://juncture-digital.org/images/favicon.svg" rel="icon"/>
   <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@4.x/css/materialdesignicons.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" integrity="sha512-iBBXm8fW90+nuLcSKlbmrPcLa0OT92xO1BIsZ+ywDWZCvqsWgccV3gFoRBv0z+8dLJgyAHIhR35VZc2oM/gI1w==" crossorigin="anonymous" />
   <link href="https://unpkg.com/tippy.js@6/dist/tippy.css" rel="stylesheet"/>
   <link href="https://unpkg.com/tippy.js@6/themes/light-border.css" rel="stylesheet"/>
+  <!-- <link href="https://juncture-digital.org/css/main.css" rel="stylesheet"/> -->
   <meta name="viewport" content="width=device-width, initial-scale=1, maximum-scale=1, user-scalable=no, minimal-ui">
+  <title>Juncture</title>
 </head>
 <body>
 
   <div id="app" ref="app" :class="layouts.join(' ')">
     <div id="header" ref="header">            
       <component v-bind:is="'ve-header'" :active="true" :scroll-top="scrollTop"
-                 :site-config="siteConfig" :essay-config="essayConfig" @menu-item-clicked="menuItemClicked"
+                 :site-config="siteConfig"
+                 :essay-config="essayConfig"
+                 :content-source="contentSource"
+                 :logins-enabled="loginsEnabled"
+                 :is-juncture="isJuncture"
+                 :is-authenticated="authenticatedUser !== null && loginsEnabled"
+                 :is-admin="isAdminUser"
+                 :version="junctureVersion"
+                 @menu-item-clicked="menuItemClicked"
+                 @authenticate="authenticate"
+                 @logout="logout"
       ></component>
     </div>
     <div id="tabs-bar" ref="tabsBar">
@@ -34,6 +47,9 @@
                  :actions="actions"
                  :hover-item="hoverItem"
                  :content-source="contentSource"
+                 :gh-token:="ghToken"
+                 :md-dir="mdDir"
+                 :is-authenticated="authenticatedUser !== null && loginsEnabled"
                  @update-component-data="updateComponentData"
                  @set-hover-item="hoverItem = $event"
       ></component>
@@ -55,6 +71,54 @@
       </div>
     </div>
 
+    <div id="contact-form" class="modal-form" style="display: none;">
+      <form v-on:submit.prevent>
+        <h1>Contact us</h1>
+        <input v-model="contactName" name="name" placeholder="Name" class="form-name" type="text" required>
+        <input v-model="contactEmail" placeholder="Email" class="form-email" type="email" required>
+        <textarea v-model="contactMessage" placeholder="Your message here" class="form-message" type="text" required></textarea>
+        <div v-html="formProcessingMessage"></div>
+        <div class="form-controls">
+          <button v-if="formProcessingStatus === 'ready'" class="form-cancel" formnovalidate @click="hideForm">Cancel</button>
+          <button v-if="formProcessingStatus === 'ready'" class="form-submit" @click="submitContactForm">Send</button>
+          <button v-if="formProcessingStatus === 'done'" class="form-submit" @click="hideForm">Close</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="create-site-form" class="modal-form" style="display: none;">
+      <form v-on:submit.prevent>
+        <h1>Create new Juncture site</h1>
+        <input :value="authenticatedUser && authenticatedUser.acct" class="form-name" type="text" readonly>
+        <input v-model="newRepo" placeholder="Repository name to update or create" class="form-email" required>
+        <div v-html="formProcessingMessage"></div>
+        <div class="form-controls">
+          <button v-if="formProcessingStatus === 'ready'" class="form-cancel" formnovalidate @click="hideForm">Cancel</button>
+          <button v-if="formProcessingStatus === 'ready'" class="form-submit" @click="doSiteCreate">Create site</button>
+          <button v-if="formProcessingStatus === 'done'" class="form-submit" @click="loadNewSite">Close</button>
+        </div>
+      </form>
+    </div>
+
+    <div id="update-site-form" class="modal-form" style="display: none;">
+      <form v-on:submit.prevent>
+        <h1>Update Juncture site</h1>
+        <input :value="contentSource.acct" class="form-name" type="text" readonly>
+        <input :value="contentSource.repo" class="form-name" type="text" readonly>
+        <div style="display:float; padding:6px 0"><span>Version:</span>
+          <select v-model="updateVersion">
+            <option v-for="tag in releaseTags" :key="tag" :value="tag" selected v-text="tag"></option>
+          </select>
+        </div>
+        <div v-html="formProcessingMessage"></div>
+        <div class="form-controls">
+          <button v-if="formProcessingStatus === 'ready'" class="form-cancel" formnovalidate @click="hideForm">Cancel</button>
+          <button v-if="formProcessingStatus === 'ready'" class="form-submit" @click="doSiteUpdate">Update site</button>
+          <button v-if="formProcessingStatus === 'done'" class="form-submit" @click="hideForm">Close</button>
+        </div>
+      </form>
+    </div>
+
   </div>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/markdown-it-footnote/3.0.2/markdown-it-footnote.min.js" integrity="sha512-9VOGZLBYkfqGR+OigfgoF3RUvDJRvQ9BAVgOKYmrvXlX7k+yBm5iJCpZEMpqmg2b1Cld1fiy2p0nEbDAcz9Q4w==" crossorigin="anonymous"></script>
   <script src="https://cdn.jsdelivr.net/npm/markdown-it-attrs@4.0.0/markdown-it-attrs.browser.js"></script>
@@ -67,7 +131,8 @@
   <script src="https://unpkg.com/tippy.js@6"></script>
   <script src="https://blueimp.github.io/JavaScript-MD5/js/md5.min.js"></script>
   <script src="https://cdnjs.cloudflare.com/ajax/libs/highlight.js/9.9.0/highlight.min.js"></script>
-
+  <script src="https://www.gstatic.com/firebasejs/8.4.3/firebase.js"></script>
+  
   <!-- This is used for deep linking of Single Page Apps when hosted with GitHub Pages -->
   <script type="text/javascript">
     (function(l) {
@@ -83,12 +148,18 @@
       }
     }(window.location))
   </script>
+  
   <script>
     console.log(window.location)
+    const isJuncture = window.location.hostname.indexOf('juncture-digital.org') >= 0 || window.location.host === 'localhost:8088'
+    const junctureVersion = 'main'
+    console.log(`isJuncture=${isJuncture} junctureVersion=${junctureVersion} referrer=${document.referrer}`)
+
+    let head = document.querySelector('head')
+    head.appendChild(makeLink(`https://gitcdn.link/cdn/jstor-labs/juncture/${junctureVersion}/css/main.css`))
 
     const referrerUrl = document.referrer
     if (referrerUrl) {
-      console.log(`referrer=${referrerUrl}`)
       const referrer = parseUrl(referrerUrl)
       if (referrer.host === 'github.com') {
         const referrerPath = referrer.pathname.slice(1).split('/')
@@ -147,7 +218,7 @@
       // For local dev in GHP mode
       if (window.location.host === 'localhost:8080' || window.location.hostname.indexOf('gitpod') >= 0) {
         let repo = window.location.pathname.split('/').filter(elem => elem !== '')[0]
-        contentSource = {acct: null, repo, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true,
+        contentSource = {acct: 'jstor-labs', repo, ref: 'main', baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true,
                          assetsBaseUrl: `${window.location.origin}/${repo}`}
 
       // For local dev in custom domain mode
@@ -163,11 +234,13 @@
         // GHP deploy mode
         if (window.location.hostname.indexOf('github.io') > 0) {
           [acct, repo] = window.location.href.replace(/\.github\.io/,'').split('/').slice(2, 4)
-          contentSource = {acct, repo, ref: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true, 
-                           assetsBaseUrl: `${window.location.origin}/${repo}`}
+          contentSource = {acct, repo, ref: qargs.ref || 'main', baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true, 
+                           // assetsBaseUrl: `${window.location.origin}/${repo}`}
+                           assetsBaseUrl: `https://gitcdn.link/cdn/${acct}/${repo}/${qargs.ref || 'main'}`}
+
         // juncture-digital.org
-        } else if (window.location.hostname === 'juncture-digital.org') {
-          contentSource = {acct: 'jstor-labs', repo: 'juncture', ref: 'main', baseUrl: 'https://gitcdn.link/repo/jstor-labs/juncture/main', basePath: '', isGhpSite: false}
+        } else if (isJuncture) {
+          contentSource = {acct: 'jstor-labs', repo: 'juncture', ref: 'main', baseUrl: 'https://gitcdn.link/cdn/jstor-labs/juncture/main', basePath: '', isGhpSite: false}
           let pathElems = window.location.pathname.split('/').filter(elem => elem !== '')
           if (pathElems.length >= 2) {
             let ghRepoInfo = await githubRepoInfo(pathElems[0], pathElems[1])
@@ -185,14 +258,32 @@
 
     let qargs = window.location.href.indexOf('?') > 0 ? parseQueryString(window.location.href.split('?')[1]) : {}
     
-    let unscopedToken = 'Z2hwX05lcnV2RUYzRmx6M3o5YnFjQWZuOGpJQnJMR3lEMTNmYjYyVw=='
-
-    let siteConfig, contentSource, componentsList
+    // GLobal variables used to initialize Vue
+    let siteConfig, contentSource, componentsList, ghUnscopedToken, oauthAccessToken, gcApiKey, gcAuthDomain
+    let loginsEnabled = false
+    let authenticatedUser = null
     
     const componentsRoot = 'components'
     const componentPrefix = 've-'
     const availableViewers = new Set()
     const knownGhAccts = {'jstor-labs': 'main', 'rsnyder': 'main', 'kent-map': 'main'}
+
+    async function gcOauth() {
+      if (gcApiKey && gcAuthDomain) {
+        firebase.initializeApp({apiKey: gcApiKey, authDomain: gcAuthDomain})
+        let result = await firebase.auth().getRedirectResult()
+        if (result.credential) window.localStorage.setItem('ghAuth', JSON.stringify(result))
+      }
+      try {
+        let ghAuth = JSON.parse(window.localStorage.getItem('ghAuth'))
+        if (ghAuth) {
+          authenticatedUser = ghAuth.user
+          authenticatedUser.acct = ghAuth.additionalUserInfo.username
+          authenticatedUser.isAdmin = siteConfig.siteAdmins && siteConfig.siteAdmins.indexOf(authenticatedUser.acct) >= 0
+          oauthAccessToken = ghAuth.credential.oauthAccessToken
+        }
+      } catch(err){console.log(err)}
+    }
 
     getContentSource()
     .then(sourceInfo => {
@@ -204,7 +295,9 @@
       if (window.location.host !== 'localhost:8080') {
         contentSource = {...contentSource, ...{acct: config.acct || contentSource.acct, repo: config.repo || contentSource.repo, ref: config.ref || contentSource.ref}}
       }
+      return config
     })
+    .then(config => gcOauth())
     .then(resp => getComponentsList())
     .then(clist => {
       componentsList = clist
@@ -217,11 +310,10 @@
         }
       })
 
-      let head = document.querySelector('head')
-      head.appendChild(makeLink(siteConfig.favicon || `${contentSource.baseUrl}${contentSource.isGhpSite ? contentSource.basePath : ''}/images/favicon.svg`, 'icon'))
-      head.appendChild(makeLink(`${contentSource.baseUrl}${contentSource.isGhpSite ? contentSource.basePath : ''}/css/main.css`))
+      // if (contentSource.isGhpSite) head.appendChild(makeLink(`https://gitcdn.link/cdn/jstor-labs/juncture/${junctureVersion}/css/main.css`))
+      if (siteConfig.favicon ) head.appendChild(makeLink(siteConfig.favicon, 'icon'))
       if (siteConfig.customCSS) head.appendChild(makeLink(siteConfig.customCSS))
-      document.title = siteConfig.title || 'Juncture'
+      if (siteConfig.title) document.title = siteConfig.title
 
       new Vue({
         el: '#app',
@@ -232,9 +324,12 @@
           siteConfig,
           contentSource,
           componentsList,
+          isJuncture,
+          junctureVersion,
           params: [],
           markdown: null,
-          mdPathIsDir: false,
+          mdpath: '',
+          mdDir: '/',
           markdownViewer: null,
           html: null,
           active: null,
@@ -243,6 +338,7 @@
           availableViewers,
           // viewers: [],
           selectedViewer: null,
+          contactForm: null,
           viewerData: {},
           scrollTop: 0,
           forceHorizontalLayout: window.matchMedia('only screen and (max-width: 1000px)').matches,
@@ -250,10 +346,23 @@
           hoverEntity: undefined,
           hoverItem: undefined,
           selectedItem: undefined,
-          actions: {}
+          actions: {},
+          authenticatedUser,
+          loginsEnabled,
+          externalWindow: null,
+          contactName: null,
+          contactEmail: null,
+          contactMessage: null, 
+          newRepo: null,
+          formProcessingMessage: '',
+          formProcessingStatus: 'ready',
+          releaseTags: [],
+          updateVersion: 'main'
         }),
         computed: {
           essayConfig() { return this.params.find(attr => attr['ve-config'] !== undefined) },
+          isAdminUser() { return authenticatedUser !== null && (authenticatedUser.isAdmin || contentSource.acct === authenticatedUser.acct) },
+          ghToken() { return oauthAccessToken || ghUnscopedToken },
           viewerStyle() { return { 
             height: this.viewerIsOpen
               ? this.isVerticalLayout 
@@ -285,14 +394,27 @@
             interactive: true,
             arrow: false,
             placement: 'bottom-start',          
-            onShow: async (instance) => { 
-              instance.setContent(this.$refs.markdownViewer.innerHTML) 
-            },
-            onHide: (instance) => { 
-            },
+            onShow: async (instance) => { instance.setContent(this.$refs.markdownViewer.innerHTML) },
+            onHide: (instance) => {}
           })
         },
         methods: {
+
+          authenticate() {
+            let provider = new firebase.auth.GithubAuthProvider()
+            provider.addScope('repo')
+            firebase.auth().signInWithRedirect(provider)
+          },
+          logout() { this.authenticatedUser = null; window.localStorage.removeItem('ghAuth') },
+
+          editMarkdown() {
+            this.openWindow(`https://github.com/${this.contentSource.acct}/${this.contentSource.repo}/edit/${this.contentSource.ref}${this.mdPath}`) 
+          },
+          openWindow(url, options) {
+            if (this.externalWindow) { this.externalWindow.close() }
+            if (options === undefined) options = 'toolbar=yes,location=yes,left=0,top=0,width=1000,height=1200,scrollbars=yes,status=yes'
+            this.externalWindow = window.open(url, '_blank', options)
+          },
 
           // Updates viewer data from events emitted when viewer components are loaded
           updateComponentData(data) { this.viewerData = {...this.viewerData, ...data }},
@@ -304,18 +426,95 @@
             this.scrollTop = e.target.scrollTop
           }, 5),
 
-          menuItemClicked(item) {
-            if (item === 'viewMarkdown') {
+          async menuItemClicked(action) {
+            if (action === 'viewMarkdown') {
               this.markdownViewer.show()
+            } else if (action === 'editMarkdown') {
+              this.editMarkdown()
+            } else if (action === 'addPage') {
+              this.addPage()
+            } else if (action === '/contact-us') {
+              this.showForm('contact-form')
+            } else if (action === 'createSite') {
+              this.showForm('create-site-form')
+            } else if (action === 'updateSite') {
+              console.log('updateSite')
+              let releaseTags = await getReleaseTags()
+              this.updateVersion = releaseTags[0]
+              this.releaseTags = releaseTags
+              this.showForm('update-site-form')
+            } else if (action === 'gotoGitHub') {
+              window.open(`https://github.com/${contentSource.acct}/${contentSource.repo}/tree/${contentSource.ref}`, '_blank')
+            } else if (action === 'viewSiteOnJuncture') {
+              window.location.href = `https://juncture-digital.org/${contentSource.acct}/${contentSource.repo}`
             } else {
-              this.loadEssay(item)
+              this.loadEssay(action)
             }
           },
 
+          showForm(formId) {
+            this.$refs.app.classList.add('dimmed')
+            let form = document.getElementById(formId)
+            form.style.display = 'unset'
+            form.classList.add('visible-form')
+          },
+
+          hideForm() {
+            this.$refs.app.classList.remove('dimmed')
+            let form = document.querySelector('.visible-form')
+            form.style.display = 'none'
+            form.classList.remove('visible-form')
+            this.formProcessingMessage = ''
+            this.formProcessingStatus = 'ready'
+          },
+
+          async submitContactForm() {
+            let contactData = {
+              fromAddress: `${this.contactName} <${this.contactEmail}>`,
+              toAddress: this.siteConfig.contactForm.toEmail,
+              messageSubject: this.siteConfig.contactForm.subject,
+              messageBodyText: `${this.contactMessage}\n\r[Sent by: ${this.contactName} <${this.contactEmail}>]`,
+            }
+            console.log('submitContactForm', contactData)
+            let resp = await sendEmail(contactData)
+            console.log('sendEmail response', resp)
+            this.formProcessingStatus = 'done'
+            this.formProcessingMessage = 'Contact email sent'
+          },
+
+          async doSiteCreate() {
+            this.formProcessingStatus = 'processing'
+            this.formProcessingMessage = 'Creating site...'
+            await this.createSite(this.authenticatedUser.acct, this.newRepo, junctureVersion)
+            let siteUrl = `https://${this.authenticatedUser.acct}.github.io/${this.newRepo}`
+            this.formProcessingMessage = `New Juncture site created at <a href="${siteUrl}">${siteUrl}</a>`
+            this.formProcessingStatus = 'done'
+          },
+          
+          loadNewSite() {
+            this.hideForm()
+            // window.location.href = `https://juncture-digital.org/${this.authenticatedUser.acct}/${this.newRepo}`
+            window.open(`https://juncture-digital.org/${this.authenticatedUser.acct}/${this.newRepo}`, '_blank')
+          },
+
+          async doSiteUpdate() {
+            this.formProcessingStatus = 'processing'
+            this.formProcessingMessage = `Updating site to version ${this.updateVersion === 'main' ? 'Latest' : this.updateVersion}...`
+            await this.updateSite(this.updateVersion)
+            let siteUrl = `https://${this.contentSource.acct}.github.io/${this.contentSource.repo}`
+            this.formProcessingMessage = `Site <a href="${siteUrl}">${siteUrl}</a> updated to version ${this.updateVersion === 'main' ? 'Latest' : this.updateVersion}`
+            this.formProcessingStatus = 'done'
+          },
+
+          gotoSite(url) { 
+            this.hideForm()
+            window.open(url, '_blank') 
+          },
+
           async getMarkdown(path) {
-            if (contentSource.acct) {
-              let url = `https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/contents${path}?ref=${contentSource.ref || ref}`
-              let resp = await fetch(url, { headers: { Authorization: `Token ${atob(unscopedToken)}` } })
+            if (window.location.host !== 'localhost:8080' && contentSource.acct) {
+              let url = `https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/contents${path}?ref=${contentSource.ref}`
+              let resp = await fetch(url, this.ghToken ? {headers: {Authorization:`Token ${this.ghToken}`}} : {})
               if (resp.ok) {
                 resp = await resp.json()
                 return decodeURIComponent(escape(atob(resp.content)))
@@ -328,17 +527,22 @@
             return null
           },
 
+          addPage() {
+            console.log('addPage')
+          },
+
           // Loads essay Markdown file
           async loadEssay(path, replace, anchor) {
             path = path || window.location.pathname.slice(contentSource.basePath.length) || '/'
             if (path.slice(-1) !== '/') path += '/'
-            console.log(`loadEssay: basePath=${contentSource.basePath} path=${path}`)
+            console.log(`loadEssay: basePath=${contentSource.basePath} path=${path} anchor=${this.anchor}`)
             let pathsToTry = [`${path}README.md`, `${path.slice(0,-1)}.md`, `${path}index.md`]
             for (let i = 0; i < pathsToTry.length; i++) {
               let markdown = await this.getMarkdown(pathsToTry[i])
               if (markdown) {
+                this.mdPath = pathsToTry[i]
                 this.markdown = markdown
-                this.mdPathIsDir = i !== 1
+                this.mdDir = i === 1 ? '/' : path
                 break
               }
             }
@@ -602,7 +806,6 @@
                   while (!target.dataset.target && target.parentElement) { target = target.parentElement }
                   let path = target.dataset.target
                   if (path[0] === '#') {
-                    // document.querySelector(path).scrollIntoView({ block:'start' })
                     let anchorElem = document.getElementById(path.slice(1))
                     if (anchorElem) {
                       this.scrollTop = anchorElem.offsetTop
@@ -626,7 +829,7 @@
             })
             root.querySelectorAll('param').forEach(param => {
               ['url', 'banner'].forEach(attr => {
-                if (param.attributes[attr]) param.setAttribute(attr, convertURL(param.attributes[attr].value, window.location.pathname, this.mdPathIsDir))
+                if (param.attributes[attr]) param.setAttribute(attr, convertURL(param.attributes[attr].value, window.location.pathname, this.mdDir !== '/'))
               })
             })
           },
@@ -747,6 +950,120 @@
             const actions = { ...this.actions }
             Object.keys(eventActions).forEach(target => actions[`ve-${target}`] = eventActions[target])
             this.actions = actions
+          },
+
+          replaceValues(content, replacements) {
+            for (const [toMatch, replacementValue] of Object.entries(replacements)) { content = content.replace(new RegExp(toMatch, 'g'), replacementValue) }
+            return content
+          },
+
+          async copyFile (src, tgt, path) {
+            let existing
+            resp = await fetch(`https://api.github.com/repos/${tgt.acct}/${tgt.repo}/contents${src.path}?ref=${tgt.ref}`, {headers: {Authorization: `Token ${this.ghToken}`}})
+            if (resp.ok) existing = await resp.json()
+            resp = await fetch(`https://api.github.com/repos/${src.acct}/${src.repo}/contents${src.path}?ref=${src.ref}`, {headers: {Authorization: `Token ${this.ghToken}`}})
+            resp = await resp.json()
+            let file = decodeURIComponent(escape(atob(resp.content)))
+            let payload = { message: 'initial', branch: tgt.ref, content: btoa(file) }
+            if (existing) payload.sha = existing.sha
+            resp = await fetch(`https://api.github.com/repos/${tgt.acct}/${tgt.repo}/contents${tgt.path || src.path}?ref=${tgt.ref}`, {
+              method: 'PUT', body: JSON.stringify(payload), headers: {Authorization: `Token ${this.ghToken}`} })
+          },
+
+          async waitForRepoInit(acct, repo, i) {
+            i = i === undefined ? 0 : i
+            let resp = await fetch(`https://api.github.com/repos/${acct}/${repo}/git/refs/heads`, {
+                  headers: {Authorization:`Token ${this.ghToken}`, Accept: 'application/vnd.github.v3+json'} })
+            let heads = resp.ok ? await resp.json() : null
+            console.log(`waitForRepoInit: i=${i} resp.ok=${resp.ok} heads=${heads !== null}`)
+            if (heads === null && i < 2) setTimeout(this.waitForRepoInit(acct, repo, ++i), 500)
+            return heads
+          },
+
+          async syncFiles(targetAcct, targetRepo, fromRef, syncTemplates) {
+            // Create a juncture branch in repo if needed
+            let resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/git/refs/heads`, {
+                headers: {Authorization:`Token ${this.ghToken}`, Accept: 'application/vnd.github.v3+json'} })
+            let heads = await this.waitForRepoInit(targetAcct, targetRepo)
+            if (heads) {
+              let mainHead = heads.find(head => head.ref === 'refs/heads/main')
+              let ghpHead = heads.find(head => head.ref === 'refs/heads/juncture')
+              if (!ghpHead) {
+                resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/git/refs`, {
+                    method: 'POST', body: JSON.stringify({ref: 'refs/heads/juncture', sha: mainHead.object.sha}),
+                    headers: {Authorization:`Token ${this.ghToken}`, Accept: 'application/vnd.github.v3+json'} })
+
+                // Make target repository a GitHub Pages site
+                resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/pages`, {
+                  headers: {Authorization:`Token ${this.ghToken}`, Accept: 'application/vnd.github.switcheroo-preview+json'} })
+                if (resp.status === 404) {
+                  resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/pages`, {
+                    method: 'POST', body: JSON.stringify({source: {branch: 'juncture', path: '/'}}),
+                    headers: {Authorization:`Token ${this.ghToken}`, Accept: 'application/vnd.github.switcheroo-preview+json'} })
+                }
+              }
+            }
+            let baseReplacementValues = {
+              'const junctureVersion = \'.*\'': `const junctureVersion = '${fromRef}'`,
+              '<site-url>': `https://${targetAcct}.github.io/${targetRepo}`,
+              '<repo-url>': `https://github.com/${targetAcct}/${targetRepo}`,
+              '<config-url>': `https://github.com/${targetAcct}/${targetRepo}/blob/juncture/config.yaml`,
+              '<custom-css-url>': `https://github.com/${targetAcct}/${targetRepo}/blob/main/css/custom.css`,
+              '"Page Author"': `"${authenticatedUser.displayName}"`,
+              '<github-username>': authenticatedUser.acct,
+              '<contact-email>': `${authenticatedUser.displayName} <${authenticatedUser.email}>`
+              }
+
+            // At this point we have a juncture branch and it is configured as the Github Pages source
+
+            resp = await this.getFile('/index.html', 'jstor-labs', 'juncture', fromRef)
+            this.putFile('/index.html', this.replaceValues(resp.content, baseReplacementValues), targetAcct, targetRepo, 'juncture')
+
+            resp = await this.getFile('/index.html', 'jstor-labs', 'juncture', fromRef)
+            this.putFile('/config.yaml', this.replaceValues(resp.content, baseReplacementValues), targetAcct, targetRepo, 'juncture')
+
+            await this.copyFile({acct:'jstor-labs', repo:'juncture', ref: fromRef, path:'/404.html'}, {acct: targetAcct, repo: targetRepo, ref:'juncture'})
+            await this.copyFile({acct:'jstor-labs', repo:'juncture', ref: fromRef, path:'/.nojekyll'}, {acct: targetAcct, repo: targetRepo, ref:'juncture'})
+
+            if (targetAcct === 'jstor-labs' && targetRepo === 'juncture') {
+              await this.copyFile({acct:'jstor-labs', repo:'juncture', ref: fromRef, path: '/css/main.css'}, {acct: targetAcct, repo: targetRepo, ref:'juncture'})
+            }
+
+            if (syncTemplates) {
+              resp = await this.getFile('/page-templates/new-site-readme.md', 'jstor-labs', 'juncture', fromRef)
+              let toReplace = {...baseReplacementValues, ...{'<edit-url>': `https://github.com/${targetAcct}/${targetRepo}/edit/main/README.md`}}
+              await this.putFile('/README.md', this.replaceValues(resp.content, toReplace), targetAcct, targetRepo, 'main')
+
+              resp = await this.getFile('/page-templates/new-page-readme.md', 'jstor-labs', 'juncture', fromRef)
+              toReplace = {...baseReplacementValues, ...{'<edit-url>': `https://github.com/${targetAcct}/${targetRepo}/edit/main/about/README.md`}}
+              await this.putFile('/about/README.md', this.replaceValues(resp.content, toReplace), targetAcct, targetRepo, 'main')
+            }
+
+          },
+
+          async createSite(targetAcct, targetRepo, fromRef) {
+            console.log(`createSite: targetAcct=${targetAcct} targetRepo=${targetRepo} fromRef=${fromRef}`)
+            // See if repo exists and create it if needed
+            let resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}`, { headers: {Authorization: `Token ${this.ghToken}`}} )
+            let repoExists = resp.ok
+            if (repoExists) {
+              let resp = await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/contents/index.html?ref=juncture`, {headers: {Authorization:`Token ${this.ghToken}`}})
+              if (resp.ok) sha = await resp.json().sha
+            } else { // create repo with auto_init enabled to create main branch and README.md file
+              resp = await fetch('https://api.github.com/user/repos', { method: 'POST', headers: {Authorization:`Token ${this.ghToken}`},
+                  body: JSON.stringify({name: targetRepo, description: 'Juncture repository', auto_init: true}) })
+              resp = await resp.json()
+            }
+
+            this.syncFiles(targetAcct, targetRepo, fromRef, true)
+
+            // Request rebuild of Pages site
+            await fetch(`https://api.github.com/repos/${targetAcct}/${targetRepo}/pages/builds`, {method: 'POST', headers: {Authorization: `Token ${this.ghToken}`}})
+          },
+
+          async updateSite(fromRef) {
+            console.log(`updateSite: fromRef=${fromRef}`)
+            this.syncFiles(targetAcct, targetRepo, fromRef, false)
           }
     
         },
@@ -888,6 +1205,47 @@
             })
           }
           return objArray
+        },
+        async getFile(path, acct, repo, ref) {
+          acct = acct || this.contentSource.acct
+          repo = repo || this.contentSource.repo
+          ref = ref || this.contentSource.ref
+          console.log(`getFile: path=${path} acct=${acct} repo=${repo} ref=${ref}`)
+          if (window.location.hostname !== 'localhost' && acct) {
+            let ghToken = oauthAccessToken || ghUnscopedToken
+            let url = `https://api.github.com/repos/${acct}/${repo}/contents${path}?ref=${ref}`
+            let resp = await fetch(url, ghToken ? {headers: {Authorization:`Token ${ghToken}`}} : {})
+            if (resp.ok) {
+              resp = await resp.json()
+              return { sha: resp.sha, content: decodeURIComponent(escape(atob(resp.content))) }
+            }
+          } else {
+            let url = `${this.contentSource.baseUrl}${this.contentSource.basePath}${path}`
+            let resp = await fetch(url)
+            if (resp.ok) resp = await resp.text()
+            return {content: resp}
+          }
+          return null
+        },
+        async putFile(path, content, acct, repo, branch, message) {
+          acct = acct || this.contentSource.acct
+          repo = repo || this.contentSource.repo
+          branch = branch || this.contentSource.ref
+          message = message || 'API Commit'
+          console.log(`putFile: path=${path} acct=${acct} repo=${repo} branch=${branch} message=${message}`)
+          if (window.location.hostname !== 'localhost' && acct) {
+            let ghToken = oauthAccessToken || ghUnscopedToken
+            let existing = await this.getFile(path, acct, repo, branch)
+            let payload = { message, branch, content: btoa(content) }
+            console.log(`existing=${existing ? existing.sha : 'none'}`)
+            if (existing) payload.sha = existing.sha
+            let url = `https://api.github.com/repos/${acct}/${repo}/contents${path}?ref=${branch}`
+            let resp = await fetch(url, { method: 'PUT', body: JSON.stringify(payload), headers: {Authorization: `Token ${ghToken}`} })
+            resp = await resp.json()
+          } else {
+            let url = `${this.contentSource.baseUrl}${this.contentSource.basePath}${path}`
+            let resp = await fetch(url, { method: 'PUT', body: content })
+          }
         }
       }
     })
@@ -896,71 +1254,83 @@
     function camelToKebab(input) { return input.replace(/([a-z])([A-Z])/g, '$1-$2').toLowerCase()}
     function kebabToCamel(input) { return input.replace(/-([a-z])/g, function (g) {return g[1].toUpperCase()})}
     function isNumeric(arg) { return !isNaN(arg) }
-    function isEntityID(arg) { console.log('arg', arg); return typeof arg === 'string' && arg.split(':').slice(-1).filter(val => val.length > 1 && val[0] === 'Q' && isNumeric(val.slice(0))) !== undefined }
+    function isEntityID(arg) { return typeof arg === 'string' && arg.split(':').slice(-1).find(val => val.length > 1 && val[0] === 'Q' && isNumeric(val.slice(1))) !== undefined }
 
     // Gets site config
     async function getSiteConfig() {
       let config = {}
+      // let resp = await fetch(`https://gitcdn.link/cdn/jstor-labs/juncture/${junctureVersion}/config.yaml`)
+      let resp = await fetch(`https://gitcdn.link/cdn/jstor-labs/juncture/juncture/config.yaml`)
+      resp = YAML.parse(await resp.text())
+      ghUnscopedToken = atob(resp.ghUnscopedToken)
+      if (isJuncture) {
+        config = resp
+        gcApiKey = atob(config.gcApiKey)
+        gcAuthDomain = atob(config.gcAuthDomain)
+      }
       if (contentSource.isGhpSite) {
-        let resp = await fetch(`${contentSource.baseUrl}${contentSource.basePath}/config.yaml`)
-        if (resp.ok) {
-          config = YAML.parse(await resp.text())
-        } else {
-          resp = await fetch(`${contentSource.baseUrl}${contentSource.basePath}/config.json`)
-          config = resp.ok ? await resp.json() : {}
-        }
-      } else if (contentSource.acct) {
-        let resp = await fetch(`https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/contents/config.yaml?ref=${contentSource.ref || ref}`, {
-                                      headers: { Authorization: `Token ${atob(unscopedToken)}` } })
+        resp = await fetch(`${contentSource.baseUrl}${contentSource.basePath}/config.yaml`)
+        if (resp.ok) config = YAML.parse(await resp.text())
+      } else if (contentSource.acct && contentSource.acct !== 'jstor-labs' && contentSource.repo !== 'juncture') {
+        config = {}
+        let ghToken = oauthAccessToken || ghUnscopedToken
+        resp = await fetch(`https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/contents/config.yaml?ref=juncture`,
+                               ghToken ? {headers: {Authorization:`Token ${ghToken}`}} : {})
         if (resp.ok) {
           resp = await resp.json()
           config = YAML.parse(atob(resp.content))
-        } else {
-          resp = await fetch(`https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/contents/config.json?ref=${contentSource.ref || ref}`, {
-                                      headers: { Authorization: `Token ${atob(unscopedToken)}` } })
-          if (resp.ok) {
-            resp = await resp.json()
-            config = JSON.parse(atob(resp.content))
-          }
         }
       } else {
-        let resp = await fetch(`${window.location.origin}/config.yaml`)
+        resp = await fetch(`${window.location.origin}/config.yaml`)
         if (resp.ok) config = YAML.parse(await resp.text())
       }
       ['banner', 'favicon', 'customCSS'].forEach(attr => { if (config[attr]) config[attr] = convertURL(config[attr]) })
+      if (config.ghUnscopedToken) ghUnscopedToken = atob(config.ghUnscopedToken)
+      if (config.gcApiKey) gcApiKey = atob(config.gcApiKey)
+      if (config.gcAuthDomain) gcAuthDomain = atob(config.gcAuthDomain)
+      loginsEnabled = gcApiKey !== undefined && gcAuthDomain !== undefined
       return config
+    }
+
+    async function getReleaseTags() {
+      let resp = await fetch('https://api.github.com/repos/jstor-labs/juncture/tags')
+      resp = await resp.json()
+      return resp.map(tag => tag.name)
     }
 
     // Determines if Github repo exists
     async function githubRepoInfo(acct, repo) {
       if (knownGhAccts[acct]) {
         return {acct, repo, ref: knownGhAccts[acct], basePath: `/${acct}/${repo}`,
-                assetsBaseUrl: `https://gitcdn.link/repo/${acct}/${repo}/${qargs.ref || knownGhAccts[acct]}`
-               }
+                assetsBaseUrl: `https://gitcdn.link/cdn/${acct}/${repo}/${qargs.ref || knownGhAccts[acct]}`}
       } else {
-        let resp = await fetch(`https://api.github.com/repos/${acct}/${repo}`, {headers: {Authorization: `Token ${atob(unscopedToken)}`}})
+        let ghToken = oauthAccessToken || ghUnscopedToken
+        let resp = await fetch(`https://api.github.com/repos/${acct}/${repo}`,
+                               ghToken ? { headers: {Authorization: `Token ${ghToken}`}} : {} )
         if (resp.ok) {
           resp = await resp.json()
           return {acct, repo, ref: qargs.ref || resp.default_branch, basePath: `/${acct}/${repo}`, 
-                  assetsBaseUrl: `https://gitcdn.link/repo/${acct}/${repo}/${qargs.ref || resp.default_branch}`
-                 }
+                  assetsBaseUrl: `https://gitcdn.link/cdn/${acct}/${repo}/${qargs.ref || resp.default_branch}`}
         }
       }
     }
   
     // Gets a list of available components
     async function getComponentsList() {
+      let ref = contentSource.acct === 'jstor-labs' && contentSource.repo === 'juncture' ? junctureVersion : contentSource.ref
+      console.log(`getComponentsList: ref=${ref} junctureVersion=${junctureVersion}`)
       let componentsList = []
-      if (contentSource.acct && contentSource.repo && contentSource.ref) {
-        let resp = await fetch(`https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/git/trees/${contentSource.ref}`, {
-                         headers: {Authorization: `Token ${atob(unscopedToken)}`}})
+      let ghToken = oauthAccessToken || ghUnscopedToken
+      if (window.location.hostname !== 'localhost' && contentSource.acct && contentSource.repo && contentSource.ref) {
+        let resp = await fetch(`https://api.github.com/repos/${contentSource.acct}/${contentSource.repo}/git/trees/${ref}`,
+                               ghToken ? { headers: {Authorization: `Token ${ghToken}`}} : {} )
         if (resp.ok) {
           resp = await resp.json()
           let ghComponentsItem = resp.tree.find(item => item.path === componentsRoot)
           if (ghComponentsItem) {
-            resp = await fetch(ghComponentsItem.url)
+            resp = await fetch(ghComponentsItem.url, ghToken ? { headers: {Authorization: `Token ${ghToken}`}} : {} )
             resp = await resp.json()
-            componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/${contentSource.acct}/${contentSource.repo}/${contentSource.ref}/${componentsRoot}/${item.path}`)]
+            componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/${contentSource.acct}/${contentSource.repo}/${ref}/${componentsRoot}/${item.path}`)]
           }
         }
       } 
@@ -970,12 +1340,13 @@
         resp = await resp.json()
         componentsList = [...componentsList, ...resp.files.map(fname => `${contentSource.baseUrl}${basePath}/${componentsRoot}/${fname}`)]
       }
-      if (window.location.hostname.indexOf('juncture-digital.org') >= 0 && contentSource.acct !== 'jstor-labs' && contentSource.repo !== 'juncture') {
-        let resp = await fetch(`https://api.github.com/repos/jstor-labs/juncture/git/trees/main`, {headers: {Authorization: `Token ${atob(unscopedToken)}`}})
+      // if (isJuncture && contentSource.acct !== 'jstor-labs' && contentSource.repo !== 'juncture') {
+      if (contentSource.acct !== 'jstor-labs' && contentSource.repo !== 'juncture') {
+        let resp = await fetch(`https://api.github.com/repos/jstor-labs/juncture/git/trees/${junctureVersion}`, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
         resp = await resp.json()
-        resp = await fetch(resp.tree.find(item => item.path === componentsRoot).url)
+        resp = await fetch(resp.tree.find(item => item.path === componentsRoot).url, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
         resp = await resp.json()
-        componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/jstor-labs/juncture/main/${componentsRoot}/${item.path}`)]
+        componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/jstor-labs/juncture/${junctureVersion}/${componentsRoot}/${item.path}`)]
       }
       return componentsList
     }
@@ -1031,8 +1402,16 @@
       }
       if (pathElems[0] === contentSource.repo) pathElems = pathElems.slice(1)
       converted = `${contentSource.assetsBaseUrl || contentSource.baseUrl}/${pathElems.join('/')}`
-      console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
+      // console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
       return converted
+    }
+
+    async function sendEmail(options) {
+      let resp = await fetch('https://visual-essays.app/send-email/', {
+        method: 'POST', body: JSON.stringify(options),
+        headers: {'Content-Type': 'application/json', Accept: 'application/json'},
+      })
+      return await resp.json()
     }
   </script>
 
