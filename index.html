@@ -649,7 +649,7 @@
                 .map(param => param.attributes.url.value)
                 .forEach(customComponentUrl => {
                   let httpComponent = httpVueLoader(customComponentUrl)
-                  let componentName = `${componentPrefix}${camelToKebab(componentUrl.split('/').pop().split('.')[0])}`
+                  let componentName = `${componentPrefix}${camelToKebab(customComponentUrl.split('/').pop().split('.')[0])}`
                   if (!availableViewers.has(componentName)) {
                     availableViewers.add(componentName)
                     Vue.component(componentName, httpComponent)
