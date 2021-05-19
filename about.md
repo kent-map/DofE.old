@@ -7,7 +7,7 @@ This site [ ]
 # What we are working on
 
 ##
-[**Canterbury - Now and Then**](/canterbury/historic-postcards)
+[**Canterbury - Now and Then**](/historical-postcards/readme)
 
 - author: your names
 
