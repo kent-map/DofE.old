@@ -9,8 +9,6 @@ This site [ ]
 ##
 [**Canterbury - Now and Then**](/historical-postcards/README)
 
-- author: your names
-
 ![](https://dev.visual-essays.app/thumbnail?url=https://stor.artstor.org/stor/f713d9aa-2c9b-4882-a3e6-dd7126e1cb2e)
 
 Tell us more
