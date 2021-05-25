@@ -1,7 +1,7 @@
 <!DOCTYPE html>
 <html>
 <head>
-  <link href="https://juncture-digital.org/images/favicon.svg" rel="icon"/>
+  <!-- <link href="https://juncture-digital.org/images/favicon.svg" rel="icon"/> -->
   <link href="https://fonts.googleapis.com/css?family=Roboto:100,300,400,500,700,900" rel="stylesheet">
   <link href="https://cdn.jsdelivr.net/npm/@mdi/font@4.x/css/materialdesignicons.min.css" rel="stylesheet">
   <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/5.15.3/css/all.min.css" rel="stylesheet" integrity="sha512-iBBXm8fW90+nuLcSKlbmrPcLa0OT92xO1BIsZ+ywDWZCvqsWgccV3gFoRBv0z+8dLJgyAHIhR35VZc2oM/gI1w==" crossorigin="anonymous" />
@@ -19,13 +19,15 @@
                  :site-config="siteConfig"
                  :essay-config="essayConfig"
                  :content-source="contentSource"
+                 :path="path"
                  :logins-enabled="loginsEnabled"
                  :is-juncture="isJuncture"
                  :is-authenticated="authenticatedUser !== null && loginsEnabled"
                  :is-admin="isAdminUser"
                  :version="junctureVersion"
+                 :do-action-callback="doActionCallback"
                  component-name="ve-header"
-                 @menu-item-clicked="menuItemClicked"
+                 @do-action="doAction"
                  @authenticate="authenticate"
                  @logout="logout"
       ></component>
@@ -73,21 +75,6 @@
           <pre v-highlightjs="markdown"><code class="markdown"></code></pre>
         </div>
       </div>
-    </div>
-
-    <div id="contact-form" class="modal-form" style="display: none;">
-      <form v-on:submit.prevent>
-        <h1>Contact us</h1>
-        <input v-model="contactName" name="name" placeholder="Name" class="form-name" type="text" required>
-        <input v-model="contactEmail" placeholder="Email" class="form-email" type="email" required>
-        <textarea v-model="contactMessage" placeholder="Your message here" class="form-message" type="text" required></textarea>
-        <div v-html="formProcessingMessage"></div>
-        <div class="form-controls">
-          <button v-if="formProcessingStatus === 'ready'" class="form-cancel" formnovalidate @click="hideForm">Cancel</button>
-          <button v-if="formProcessingStatus === 'ready'" class="form-submit" @click="submitContactForm">Send</button>
-          <button v-if="formProcessingStatus === 'done'" class="form-submit" @click="hideForm">Close</button>
-        </div>
-      </form>
     </div>
 
     <div id="create-site-form" class="modal-form" style="display: none;">
@@ -174,7 +161,7 @@
   <script>
     console.log(window.location)
     const isJuncture = window.location.hostname.indexOf('juncture-digital.org') >= 0 || window.location.host === 'localhost:8088'
-    const junctureVersion = 'v0.0.91'
+    const junctureVersion = 'v0.0.105'
     console.log(`isJuncture=${isJuncture} junctureVersion=${junctureVersion} referrer=${document.referrer}`)
 
     const referrerUrl = document.referrer
@@ -265,6 +252,7 @@
           let pathElems = window.location.pathname.split('/').filter(elem => elem !== '')
           if (pathElems.length >= 2) {
             let ghRepoInfo = await githubRepoInfo(pathElems[0], pathElems[1])
+            console.log('ghRepoInfo', ghRepoInfo)
             if (ghRepoInfo) contentSource = {...contentSource, ...ghRepoInfo}
           }
 
@@ -316,7 +304,7 @@
         contentSource = {...contentSource, ...{
             acct: contentSource.acct || config.acct, 
             repo: contentSource.repo || config.repo, 
-            ref: config.ref || contentSource.ref
+            ref: qargs.ref || config.ref || contentSource.ref
         }}
         if (!contentSource.isGhpSite && contentSource.acct) contentSource.assetsBaseUrl = `https://gitcdn.link/cdn/${contentSource.acct}/${contentSource.repo}/${contentSource.ref}`;
         ['banner', 'favicon', 'customCSS'].forEach(attr => { if (config[attr]) config[attr] = convertURL(config[attr]) })
@@ -364,6 +352,7 @@
           junctureVersion,
           params: [],
           markdown: null,
+          path: '/',
           mdpath: '',
           mdDir: '/',
           markdownViewer: null,
@@ -375,7 +364,6 @@
           availableViewers,
           // viewers: [],
           selectedViewer: null,
-          contactForm: null,
           viewerData: {},
           scrollTop: 0,
           forceHorizontalLayout: window.matchMedia('only screen and (max-width: 1000px)').matches,
@@ -387,9 +375,6 @@
           authenticatedUser,
           loginsEnabled,
           externalWindow: null,
-          contactName: null,
-          contactEmail: null,
-          contactMessage: null, 
           newRepo: null,
           newPage: null,
           formProcessingMessage: '',
@@ -397,7 +382,8 @@
           releaseTags: [],
           updateVersion: 'main',
           reposForAcct: [],
-          selectedRepo: null
+          selectedRepo: null,
+          doActionCallback: {}
         }),
         computed: {
           essayConfig() { return this.params.find(attr => attr['ve-config'] !== undefined) },
@@ -466,8 +452,13 @@
             this.scrollTop = e.target.scrollTop
           }, 5),
 
-          async menuItemClicked(action) {
-            if (action === 'viewMarkdown') {
+          async doAction(action, options) {
+            console.log(`doAction`, action, options)
+            if (action === 'send-email') {
+              this.doActionCallback = {status: 'processing', message: 'Processing request'}
+              await sendEmail(options)
+              this.doActionCallback = {status: 'done', message: 'Email sent'}
+            } else if (action === 'viewMarkdown') {
               this.markdownViewer.show()
             } else if (action === 'editMarkdown') {
               this.editMarkdown()
@@ -475,8 +466,6 @@
               this.reposForAcct = await this.listRepositories()
               this.selectedRepo = this.reposForAcct.length > 0 ? this.reposForAcct[0].name : null
               this.showForm('add-page-form')
-            } else if (action === '/contact-us') {
-              this.showForm('contact-form')
             } else if (action === 'createSite') {
               this.showForm('create-site-form')
             } else if (action === 'updateSite') {
@@ -489,8 +478,8 @@
               window.open(`https://github.com/${contentSource.acct}/${contentSource.repo}/tree/${contentSource.ref}`, '_blank')
             } else if (action === 'viewSiteOnJuncture') {
               window.location.href = `https://juncture-digital.org/${contentSource.acct}/${contentSource.repo}`
-            } else {
-              this.loadEssay(action)
+            } else if (action === 'loadEssay') {
+              this.loadEssay(options)
             }
           },
 
@@ -508,20 +497,6 @@
             form.classList.remove('visible-form')
             this.formProcessingMessage = ''
             this.formProcessingStatus = 'ready'
-          },
-
-          async submitContactForm() {
-            let contactData = {
-              fromAddress: `${this.contactName} <${this.contactEmail}>`,
-              toAddress: this.siteConfig.contactForm.toEmail,
-              messageSubject: this.siteConfig.contactForm.subject,
-              messageBodyText: `${this.contactMessage}\n\r[Sent by: ${this.contactName} <${this.contactEmail}>]`,
-            }
-            console.log('submitContactForm', contactData)
-            let resp = await sendEmail(contactData)
-            console.log('sendEmail response', resp)
-            this.formProcessingStatus = 'done'
-            this.formProcessingMessage = 'Contact email sent'
           },
 
           async doSiteCreate() {
@@ -596,6 +571,7 @@
           async loadEssay(path, replace, anchor) {
             path = path || window.location.pathname.slice(contentSource.basePath.length) || '/'
             if (path.slice(-1) !== '/') path += '/'
+            this.path = path 
             console.log(`loadEssay: basePath=${contentSource.basePath} path=${path} anchor=${this.anchor}`)
             let pathsToTry = [`${path}README.md`, `${path.slice(0,-1)}.md`, `${path}index.md`]
             for (let i = 0; i < pathsToTry.length; i++) {
@@ -623,8 +599,10 @@
             let essayElem = this.markdownToElem(this.markdown)
             Array.from(this.$refs.essay.classList).forEach(cls => this.$refs.essay.classList.remove(cls))
             this.convertResourceUrls(essayElem, path)
+            Array.from(document.getElementById('essay').querySelectorAll('.collapsible')).forEach(el =>el.removeEventListener('click', this.toggleExpandCollapse))
             this.html = this.doCustomFormatting(essayElem)
             this.$nextTick(() => {
+              Array.from(document.getElementById('essay').querySelectorAll('.collapsible')).forEach(el =>el.addEventListener('click', this.toggleExpandCollapse))
               let segments = [...document.getElementById('essay').querySelectorAll('.segment')]
               this.getEntityData([...this.findEntities()]).then(entities => {
                 this.entities = entities
@@ -682,9 +660,11 @@
           doCustomFormatting(elem) {
             Array.from(elem.querySelectorAll('section.cards')).forEach(cardsSection => {
               Array.from(cardsSection.querySelectorAll('section')).forEach(card => {
-                ['img', 'a', 'ul'].forEach(selector => {
+                ['img', 'a', 'strong', 'ul'].forEach(selector => {
                   let el = card.querySelector(selector)
-                  if (el) card.appendChild(el)
+                  if (el) {
+                    if (selector !== 'strong' || el.parentElement.tagName !== 'A') card.appendChild(el)
+                  }
                 })
                 let segments = []
                 Array.from(card.querySelectorAll('.segment')).forEach(seg => {
@@ -695,13 +675,33 @@
                   }
                 })
                 if (segments.length > 0) {
-                  let segsDiv = document.createElement('div')
-                  card.appendChild(segsDiv)
-                  segments.forEach(seg => segsDiv.appendChild(seg))
+                  let abstractWrapper = document.createElement('div')
+                  abstractWrapper.classList.add('abstract')
+                  card.appendChild(abstractWrapper)
+                  let abstractDiv = document.createElement('div')
+                  abstractDiv.classList.add('abstract-text')
+                  abstractWrapper.appendChild(abstractDiv)
+                  segments.forEach(seg => abstractDiv.appendChild(seg))
+                  abstractWrapper.innerHTML += '<button class="collapsible">read more</button>'
                 }
               })
+
             })
             return elem.innerHTML
+          },
+
+          toggleExpandCollapse(e) {
+            let button = e.target
+            let textDiv = button.previousElementSibling
+            console.log('expandCollapse', button, textDiv)
+            if (button.innerText == 'read more') {
+              button.innerText = 'read less'
+              textDiv.style['-webkit-line-clamp'] = 'unset'
+            }
+            else if (button.innerText == 'read less') {
+              button.innerText = 'read more'
+              textDiv.style['-webkit-line-clamp'] = 5
+            }
           },
 
           // Adds tippy popups to tagged entity text
@@ -834,23 +834,35 @@
                   segments = []
                 }
                 currentSection = new DOMParser().parseFromString('<section></section>', 'text/html').children[0].children[1].children[0]
-                let sectionClasses = Array.from(el.classList)
-                currentSection.classList.add(...sectionClasses)
-                el.classList.remove(...sectionClasses)
+                let elClasses = Array.from(el.classList)
+                el.classList.remove(...elClasses)
                 if (!el.innerHTML) el.style.display = 'none'
                 currentSection.innerHTML += el.outerHTML
+
                 let headings = [...essay.querySelectorAll(`H${sectionLevel-1}`)]
                 let parent = sectionLevel === 1 || headings.length === 0 ? essay : headings.pop().parentElement
-                parent.appendChild(currentSection)
                 let parentDataID = parent.dataset.id || ''
                 let sectionSeq = parent.querySelectorAll(`H${sectionLevel}`).length
                 let currentDataID = parentDataID ? `${parentDataID}.${sectionSeq}` : sectionSeq
                 currentSection.setAttribute('data-id', currentDataID)
+
+                if (elClasses.indexOf('cards') >= 0) {
+                  currentSection.appendChild(new DOMParser().parseFromString('<section class="cards"></section>', 'text/html').children[0].children[1].children[0])
+                } else {
+                  currentSection.classList.add(...elClasses)
+                  let cardsWrapper = parent.querySelector(':scope > .cards')
+                  if (cardsWrapper) {
+                    currentSection.classList.add('card')
+                    parent = cardsWrapper
+                  }
+                }
+
+                parent.appendChild(currentSection)
+
               } else if (el.tagName === 'P') {
                 if (el.innerHTML.indexOf('ve-button.png') >= 0) {
                   el = null
                 } else if (el.innerHTML.indexOf('class="nav"') >= 0) {
-                  console.log(el)
                   currentSection.innerHTML += el.innerHTML
                 } else {
                   segment = new DOMParser().parseFromString('<div></div>', 'text/html').children[0].children[1].children[0]
@@ -1420,7 +1432,7 @@
     // Determines if Github repo exists
     async function githubRepoInfo(acct, repo) {
       if (knownGhAccts[acct]) {
-        return {acct, repo, ref: knownGhAccts[acct], basePath: `/${acct}/${repo}`,
+        return {acct, repo, ref: qargs.ref || knownGhAccts[acct], basePath: `/${acct}/${repo}`,
                 assetsBaseUrl: `https://gitcdn.link/cdn/${acct}/${repo}/${qargs.ref || knownGhAccts[acct]}`}
       } else {
         let ghToken = oauthAccessToken || ghUnscopedToken
@@ -1461,11 +1473,18 @@
       }
       // if (isJuncture && contentSource.acct !== 'jstor-labs' || contentSource.repo !== 'juncture') {
       if (contentSource.repo !== 'juncture' || contentSource.acct !== 'jstor-labs') {
-        let resp = await fetch(`https://api.github.com/repos/jstor-labs/juncture/git/trees/${junctureVersion}`, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
-        resp = await resp.json()
-        resp = await fetch(resp.tree.find(item => item.path === componentsRoot).url, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
-        resp = await resp.json()
-        componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/jstor-labs/juncture/${junctureVersion}/${componentsRoot}/${item.path}`)]
+        if (window.location.hostname === 'localhost') {
+          let basePath = contentSource.isGhpSite ? '/juncture' : ''
+          let resp = await fetch(`${contentSource.baseUrl}${basePath}/${componentsRoot}`)
+          resp = await resp.json()
+          componentsList = [...componentsList, ...resp.files.map(fname => `${contentSource.baseUrl}${basePath}/${componentsRoot}/${fname}`)]
+        } else {
+          let resp = await fetch(`https://api.github.com/repos/jstor-labs/juncture/git/trees/${junctureVersion}`, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
+          resp = await resp.json()
+          resp = await fetch(resp.tree.find(item => item.path === componentsRoot).url, ghToken ? {headers: {Authorization: `Token ${ghToken}`}} : {})
+          resp = await resp.json()
+          componentsList = [...componentsList, ...resp.tree.map(item => `https://raw.githubusercontent.com/jstor-labs/juncture/${junctureVersion}/${componentsRoot}/${item.path}`)]
+        }
       }
       return componentsList
     }
@@ -1518,13 +1537,15 @@
         pathElems = (path || window.location.pathname).split('/').filter(elem => elem !== '')
         if (!pathIsDir) pathElems = pathElems.slice(0, -1)
         pathElems = [...pathElems, ...current.split('/').filter(elem => elem !== '')]
-        if (isJuncture && (contentSource.repo !== 'juncture' || contentSource.acct !== 'jstor-labs')) pathElems = pathElems.slice(2)
-        console.log(pathElems)
       }
-      if (pathElems[0] === contentSource.repo) pathElems = pathElems.slice(1)
+      if (isJuncture && pathElems.length >= 2) {
+        if ((contentSource.repo !== 'juncture' || contentSource.acct !== 'jstor-labs') && pathElems[0] === contentSource.acct && pathElems[1] === contentSource.repo) pathElems = pathElems.slice(2)
+      } else if (pathElems[0] === contentSource.repo) {
+        pathElems = pathElems.slice(1)
+      }
       console.log(`assetsBaseUrl=${contentSource.assetsBaseUrl}`)
       converted = `${contentSource.assetsBaseUrl || contentSource.baseUrl}/${pathElems.join('/')}`
-      // console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
+      console.log(`convertURL: current=${current} converted=${converted} path=${path} pathIsDir=${pathIsDir} pathElems=${pathElems}`)
       return converted
     }
 
