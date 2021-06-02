@@ -2,4 +2,5 @@
 
 # DofE
 Kent Maps Online - Duke of Edinburgh award site
-text text 
+
+Welcome to our site!
