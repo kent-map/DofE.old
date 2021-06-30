@@ -35,6 +35,7 @@ iiifServer: https://iiif.juncture-digital.org
 
 siteAdmins:
 - rsnyder
+- DigiHum1
 
 ######################################################
 # Optional credentials used for GitHub API and OAuth integration
