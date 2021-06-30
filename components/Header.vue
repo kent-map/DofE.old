@@ -1,21 +1,8 @@
 <template>
 
-  <!--
   <header class="header">
-    <a href="" class="logo">CSS Nav</a>
-    <input class="menu-btn" type="checkbox" id="menu-btn" />
-    <label class="menu-icon" for="menu-btn"><span class="navicon"></span></label>
-    <ul class="menu">
-      <li><a href="#work">Our Work</a></li>
-      <li><a href="#about">About</a></li>
-      <li><a href="#careers">Careers</a></li>
-      <li><a href="#contact">Contact</a></li>
-    </ul>
-  </header>
-  -->
-
-  <header class="header">
-    <img class="logo" @click="doMenuAction({action:'load-page', path:'/'})" :src="logo">
+    <!-- <img class="logo" @click="doMenuAction({action:'load-page', path:'/'})" :src="logo"> -->
+    <span class="logo" @click="doMenuAction({action:'load-page', path:'/'})">Dofe</span>
     <input class="menu-btn" type="checkbox" id="menu-btn"/>
     <label class="menu-icon" for="menu-btn"><span class="navicon"></span></label>
     <ul class="menu">
@@ -107,6 +94,7 @@ body {
   font-size: 2em;
   padding: 10px 20px;
   text-decoration: none;
+  cursor: pointer;
 }
 
 /* menu */

@@ -70,6 +70,11 @@ module.exports = {
   flex-direction: column;
 }
 
+.card:hover {
+  cursor: pointer;
+  border: 1px solid #ddd;
+}
+
 .card h2 {
   /* margin-top: 40px; */
   margin-bottom: 0;

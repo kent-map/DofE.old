@@ -2,10 +2,12 @@
 
   <main class="dofe-home">
 
-    <section>
-      <h1> DofE</h1>
-      <p>Some text</p>
-    </section>
+    <template v-for="(section, idx) in content">
+      <section v-if="!section.cards" :key="`section-${idx}`">
+        <h1 v-if="section.heading" v-html="section.heading"></h1>
+        <div v-if="section.html" v-html="section.html"></div>
+      </section>
+    </template>
 
     </section>
       <ul class="navbar">
