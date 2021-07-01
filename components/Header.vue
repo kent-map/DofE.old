@@ -1,16 +1,35 @@
 <template>
 
-  <header class="header">
-    <!-- <img class="logo" @click="doMenuAction({action:'load-page', path:'/'})" :src="logo"> -->
-    <span class="logo" @click="doMenuAction({action:'load-page', path:'/'})">Dofe</span>
-    <input class="menu-btn" type="checkbox" id="menu-btn"/>
-    <label class="menu-icon" for="menu-btn"><span class="navicon"></span></label>
-    <ul class="menu">
-      <li v-for="(navItem, idx) in nav" :key="`nav-${idx}`"@click="doMenuAction(navItem)">
-        <i v-if="navItem.icon" :class="navItem.icon"></i>{{ navItem.label }}
-      </li>
-    </ul>
-  </header>
+  <div>
+
+    <header class="header">
+      <!-- <img class="logo" @click="doMenuAction({action:'load-page', path:'/'})" :src="logo"> -->
+      <span class="logo" @click="doMenuAction({action:'load-page', path:'/'})">Dofe</span>
+      <input class="menu-btn" type="checkbox" id="menu-btn"/>
+      <label class="menu-icon" for="menu-btn"><span class="navicon"></span></label>
+      <ul class="menu">
+        <li v-for="(navItem, idx) in nav" :key="`nav-${idx}`"@click="doMenuAction(navItem)">
+          <i v-if="navItem.icon" :class="navItem.icon"></i>{{ navItem.label }}
+        </li>
+      </ul>
+    </header>
+
+    <div id="contact-form" class="modal-form" style="display: none;">
+      <form v-on:submit.prevent>
+        <h1>Contact us</h1>
+        <input v-model="contactName" name="name" placeholder="Name" class="form-name" type="text" required>
+        <input v-model="contactEmail" placeholder="Email" class="form-email" type="email" required>
+        <textarea v-model="contactMessage" placeholder="Your message here" class="form-message" type="text" required></textarea>
+        <div v-html="doActionResponse.message"></div>
+        <div class="form-controls">
+          <button v-if="!doActionResponse.status" class="form-cancel" formnovalidate @click="hideForm">Cancel</button>
+          <button v-if="!doActionResponse.status" class="form-submit" @click="submitContactForm">Send</button>
+          <button v-if="doActionResponse.status === 'done'" class="form-submit" @click="hideForm">Close</button>
+        </div>
+      </form>
+    </div>
+
+  </div>
 
 </template>
 
@@ -21,9 +40,16 @@ module.exports = {
   props: {
     params: {type: Array, default: () => ([])},
     siteConfig: { type: Object, default: function(){ return {}} },
-    essayConfig: { type: Object, default: function(){ return {}} }
+    essayConfig: { type: Object, default: function(){ return {}} },
+    doActionCallback: { type: Object, default: () => ({}) }
   },
-  data: () => ({}),
+  data: () => ({
+    // for contact-us email
+    doActionResponse: {},
+    contactName: null,
+    contactEmail: null,
+    contactMessage: null
+  }),
   computed: {
     essayNav() { return this.params.filter(param => param.nav) },
     nav() { return this.essayNav.length > 0 ? this.essayNav : this.siteConfig.nav || [] },
@@ -34,11 +60,41 @@ module.exports = {
 
     doMenuAction(options) {
       document.getElementById('menu-btn').checked = false // close menu
-      this.$emit('do-action', options.action || 'load-page', options.path)
+      if (options.action === 'contact-us') {
+          this.showForm('contact-form')
+      } else {
+        this.$emit('do-action', options.action || 'load-page', options.path)
+      }
+    },
+
+    showForm(formId) {
+      document.getElementById('app').classList.add('dimmed')
+      let form = document.getElementById(formId)
+      form.style.display = 'unset'
+      form.classList.add('visible-form')
+    },
+
+    hideForm() {
+      document.getElementById('app').classList.remove('dimmed')
+      let form = document.querySelector('.visible-form')
+      form.style.display = 'none'
+      form.classList.remove('visible-form')
+      this.doActionResponse = {}
+    },
+
+    submitContactForm() {
+      this.$emit('do-action', 'sendmail', {
+        from: `${this.contactName} <${this.contactEmail}>`,
+        to: this.siteConfig.contactForm.to,
+        subject: this.siteConfig.contactForm.subject,
+        message: `${this.contactMessage}\n\r[Sent by: ${this.contactName} <${this.contactEmail}>]`
+      })
     }
 
   },
-  watch: {}
+  watch: {
+    doActionCallback(resp) { this.doActionResponse = resp }
+  }
 }
 
 </script>
