@@ -1,0 +1,6 @@
+ports:
+  - port: 8080-8088
+    onOpen: open-preview
+tasks:
+  - init: pip install flask
+    command: app/bin/run-dev.sh
