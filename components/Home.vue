@@ -135,7 +135,7 @@ module.exports = {
       handler: function (html) {
         if (html) {
           this.content = this.parseHtml(html)
-          this.$nextTick(() => convertLinks(document.getElementById('essay')))
+          this.$nextTick(() => this.convertLinks(document.getElementById('essay')))
         }
       },
       immediate: true

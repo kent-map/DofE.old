@@ -33,7 +33,7 @@ module.exports = {
   computed: {},
   mounted() {
     let root = document.getElementById('essay')
-    convertLinks(root)
+    this.convertLinks(root)
     const ps = document.querySelectorAll('.clamp-wrapper')
     const observer = new ResizeObserver(entries => {
       for (let entry of entries) {
