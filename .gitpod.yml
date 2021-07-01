@@ -3,4 +3,4 @@ ports:
     onOpen: open-preview
 tasks:
   - init: pip install flask
-    command: app/bin/run-dev.sh
+    command: ./utils/dev-server/server.py -l info -r ..

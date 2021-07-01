@@ -266,7 +266,7 @@
 
       } else if (ENV === 'DEV') {
         // For local dev in GHP mode
-        let repo = window.location.pathname.split('/').filter(elem => elem !== '')[0] || 'juncture'
+        let repo = window.location.pathname.split('/').filter(elem => elem !== '')[0] || 'DofE'
         contentSource = {acct: 'jstor-labs', repo, branch: 'main', ref: 'main', hash: null, baseUrl: window.location.origin, basePath: `/${repo}`, isGhpSite: true,
                          assetsBaseUrl: `${window.location.origin}/${repo}`}
         // isJuncture = contentSource.acct === 'jstor-labs' && contentSource.repo === 'juncture'
