@@ -21,14 +21,6 @@ app = Flask(__name__)
 root = BASEDIR
 port = 8080
 
-'''
-@app.route('/', methods=['GET'])
-def main(path=None):
-    logger.info(f'{BASEDIR}/index.html')
-    with open(os.path.join(BASEDIR, 'index.html'), 'r') as fp:
-        return fp.read(), 200
-'''
-
 @app.route('/<path:path>', methods=['PUT'])
 def put(path=''):
     logger.info(f'PUT: {path}')
@@ -77,14 +69,6 @@ def get(path=''):
             logger.info(content_path)
             with open(content_path, 'r') as fp:
                 return fp.read(), 200
-
-    '''
-    elif os.path.exists(f'{content_path}.md'):
-        content_path = f'{root}{"/" + path_elems[0] if len(path_elems) > 0 else ""}/index.html'
-        logger.info(content_path)
-        with open(content_path, 'r') as fp:
-            return fp.read(), 200
-    '''
 
     if len(path_elems) == 0 or (len(path_elems) > 0 and path_elems[-1].split('.')[-1] not in ('ico', 'svg', 'yaml', 'json', 'md')):
         # content_path = f'{root}/index.html'

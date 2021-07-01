@@ -24,7 +24,7 @@ module.exports = {
     viewer: null
   }),
   computed: {
-    compareItems() { return this.params.filter(param => param.viewer === 've-compare') },
+    compareItems() { return this.params.filter(param => param['ve-compare'] !== undefined) },
     mode() { let itemsWithMode = this.compareItems.filter(item => item.sync || item.curtain).map(item => item.sync ? 'sync' : 'curtain') 
       return itemsWithMode.length > 0 ? itemsWithMode[0] : 'curtain'
     }
@@ -37,7 +37,6 @@ module.exports = {
     },
 
     initViewer(images) {
-      console.log('initViewer')
       let main = document.getElementById('now-and-then')
       let container = document.getElementById('osd')
       if (container) {
@@ -88,6 +87,7 @@ module.exports = {
         }
       })
       let manifests = await Promise.all(promises)
+      console.log(manifests)
       manifests = manifests.map((manifest, idx) => {return {...manifest, ...this.compareItems[idx]}})
       let tileSources = manifests.map((manifest, idx) => {
         const opacity = idx === 0 ? 1 : this.mode === 'layers' ? 0 : 1
