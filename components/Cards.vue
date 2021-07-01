@@ -2,10 +2,9 @@
   <div class="cards clamp-10">
     <div v-for="(card, cidx) in locations" 
       :key="`card-${cidx}`" :id="card.id" :class="card.classes.join(' ')"
-      @click="cardSelected(card.slug)"
     >
       <div v-if="card.media" class="media" v-html="card.media"></div>
-      <h2 v-if="card.heading" v-html="card.heading"></h2>
+      <h2 v-if="card.heading" v-html="card.heading" @click="cardSelected(card.slug)"></h2>
       <div v-if="card.content.length > 0" class="card-text">
         <input type="checkbox" :id="`exp-${cidx}`">
         <div class="clamp-wrapper">
