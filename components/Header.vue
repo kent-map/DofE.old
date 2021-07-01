@@ -101,6 +101,10 @@ module.exports = {
 
 <style>
 
+.visual-essay #essay {
+  padding: 58px 0 0 0;
+}
+
 /* Pure CSS hamburger menu -  https://codepen.io/mutedblues/pen/MmPNPG */
 
 body {
